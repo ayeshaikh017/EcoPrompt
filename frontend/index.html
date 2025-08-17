@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>EcoPrompt 🌱</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    :root{
+      --green:#2e7d32;
+      --green-dark:#1b5e20;
+      --bg1:#e8f5e9;
+      --bg2:#f1f8f6;
+      --card:#ffffff;
+      --shadow:0 3px 8px rgba(0,0,0,.1);
+    }
+    *{box-sizing:border-box}
+    body{
+      font-family:'Segoe UI', Arial, sans-serif;
+      background:linear-gradient(to bottom right,var(--bg1),var(--bg2));
+      margin:0;
+      color:#1b1b1b;
+      text-align:center;
+    }
+
+    /* Navbar */
+    .navbar{
+      background-color:var(--green);
+      color:#fff;
+      padding:1rem 2rem;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+    }
+    .navbar h2{margin:0;font-size:1.4rem}
+
+    h1{margin:1.6rem 0 .5rem;color:var(--green-dark);font-size:2.4rem}
+    .tagline{margin:0 0 1.2rem;color:#388e3c;font-size:1.05rem}
+
+    /* Auth card */
+    .card{
+      background:var(--card);
+      max-width:420px;
+      margin:2.2rem auto 0;
+      padding:1.25rem 1.25rem 1.1rem;
+      border-radius:12px;
+      box-shadow:var(--shadow);
+      text-align:left;
+    }
+    .card h3{margin:.2rem 0 .6rem;color:var(--green)}
+    .field{margin:.5rem 0}
+    .input{
+      width:100%;padding:.7rem .8rem;border:1px solid #ccc;border-radius:8px;font-size:1rem;
+    }
+    .btn{
+      width:100%;padding:.75rem;border:none;border-radius:8px;background:var(--green);color:#fff;
+      font-size:1rem;cursor:pointer;transition:.2s;margin-top:.6rem
+    }
+    .btn:hover{background:var(--green-dark)}
+    .muted{font-size:.9rem;color:#4b4b4b;margin:.4rem 0 0}
+    .muted a{color:var(--green);cursor:pointer;text-decoration:none}
+    .muted a:hover{text-decoration:underline}
+
+    /* Input section */
+    .input-row{
+      display:none; /* shown after login */
+      align-items:center;
+      gap:.5rem;
+      max-width:760px;
+      margin:1.6rem auto 0;
+      padding:0 1rem;
+    }
+    .action-input{
+      flex:1;min-width:240px;padding:.75rem;border:1px solid #ccc;border-radius:8px;font-size:1rem;
+      box-shadow:var(--shadow);
+    }
+    .action-btn{padding:.8rem 1.2rem;border:none;border-radius:8px;background:var(--green);color:#fff;font-size:1rem;cursor:pointer}
+    .action-btn:hover{background:var(--green-dark)}
+    .action-btn:disabled{background:#88b488;cursor:not-allowed}
+
+    /* Report */
+    #report{
+      display:none; /* shown after login */
+      max-width:760px;
+      margin:1.4rem auto 2rem;
+      padding:1rem 1.1rem;
+      background:#fff;
+      border-radius:10px;
+      box-shadow:var(--shadow);
+      text-align:left;
+      font-size:.95rem;
+      line-height:1.3; /* tighter */
+    }
+    #report p{margin:.35rem 0}
+    #report h4{margin:.2rem 0 .5rem}
+
+    /* Score bar */
+    .bar{width:100%;height:16px;background:#e0e0e0;border-radius:10px;overflow:hidden;margin:.5rem 0 .6rem}
+    .fill{height:100%;background:var(--green);width:0;transition:width .5s ease}
+
+    .badge{
+      display:inline-block;background:var(--green);color:#fff;border-radius:20px;
+      padding:.25rem .6rem;font-size:.85rem;margin-left:.4rem;
+    }
+
+    /* Spinner */
+    .spinner{
+      border:3px solid #f3f3f3;border-top:3px solid var(--green);border-radius:50%;
+      width:18px;height:18px;animation:spin 1s linear infinite;display:inline-block;vertical-align:middle;margin-left:8px
+    }
+    @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+
+    .list{margin:.2rem 0;padding-left:1rem}
+    .list li{margin:.2rem 0}
+  </style>
+</head>
+<body>
+  <div class="navbar"><h2>EcoPrompt 🌱</h2></div>
+
+  <h1>EcoPrompt 🌱</h1>
+  <p class="tagline">Your Actions, Your Score 🌍</p>
+
+  <!-- Auth -->
+  <div id="authCard" class="card">
+    <h3 id="authTitle">Sign Up</h3>
+    <div class="field"><input id="username" class="input" placeholder="Enter username" /></div>
+    <div class="field"><input id="password" type="password" class="input" placeholder="Enter password" /></div>
+    <button id="authBtn" class="btn" onclick="handleAuth()">Sign Up</button>
+    <p class="muted" id="authToggle">Already have an account? <a onclick="switchToLogin()">Log in</a></p>
+  </div>
+
+  <!-- Action row -->
+  <div id="actionRow" class="input-row">
+    <input id="actionInput" class="action-input" placeholder="Enter your action (e.g., I am taking a flight)" list="previousActions"
+           onkeydown="if(event.key==='Enter'){checkImpact();}" />
+    <button id="checkBtn" class="action-btn" onclick="checkImpact()">Check Impact</button>
+    <datalist id="previousActions"></datalist>
+  </div>
+
+  <!-- Report -->
+  <div id="report"></div>
+
+  <script>
+    // Decide first screen: if we've seen a username before, default to Login view
+    const storedUser = localStorage.getItem('ecoUsername');
+    if (storedUser) switchToLogin();
+
+    let currentUser = null;
+
+    function switchToLogin(){
+      document.getElementById('authTitle').innerText = 'Log In';
+      document.getElementById('authBtn').innerText = 'Log In';
+      document.getElementById('authToggle').innerHTML = `Don't have an account? <a onclick="switchToSignup()">Sign up</a>`;
+    }
+    function switchToSignup(){
+      document.getElementById('authTitle').innerText = 'Sign Up';
+      document.getElementById('authBtn').innerText = 'Sign Up';
+      document.getElementById('authToggle').innerHTML = `Already have an account? <a onclick="switchToLogin()">Log in</a>`;
+    }
+
+    async function handleAuth(){
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value.trim();
+      if(!username || !password){ alert("Please fill both fields."); return; }
+
+      const isLogin = document.getElementById('authTitle').innerText === 'Log In';
+      const url = isLogin ? 'http://localhost:5000/login' : 'http://localhost:5000/signup';
+
+      try{
+        const res = await axios.post(url, { username, password });
+        if(!res.data.success){ alert(res.data.message || 'Auth failed'); return; }
+
+        // Save username locally to show login next time
+        localStorage.setItem('ecoUsername', username);
+        currentUser = username;
+
+        // Load any history into datalist
+        const list = document.getElementById('previousActions');
+        list.innerHTML = '';
+        (res.data.history || []).forEach(a=>{
+          const opt = document.createElement('option'); opt.value = a; list.appendChild(opt);
+        });
+
+        // Swap to main UI
+        document.getElementById('authCard').style.display = 'none';
+        document.getElementById('actionRow').style.display = 'flex';
+        document.getElementById('report').style.display = 'block';
+
+        alert(isLogin ? '✅ Login successful' : '✅ Signup successful');
+      }catch(err){
+        alert(err?.response?.data?.message || 'Server error');
+      }
+    }
+
+    async function checkImpact(){
+      const action = document.getElementById('actionInput').value.trim();
+      if(!action) return;
+
+      const btn = document.getElementById('checkBtn');
+      const report = document.getElementById('report');
+      btn.disabled = true;
+      btn.innerHTML = 'Checking <span class="spinner"></span>';
+
+      try{
+        const res = await axios.post('http://localhost:5000/checkImpact', { action, username: currentUser });
+        const data = res.data.analysis;
+
+        // Badge
+        let badge = '🌱 Eco Beginner';
+        if (data.ecoScore >= 70) badge = '🌿 Eco Warrior';
+        else if (data.ecoScore >= 50) badge = '🍀 Eco Learner';
+
+        report.innerHTML = `
+          <h4>🟢 Action Checked: <b>${res.data.action}</b></h4>
+          <div class="bar"><div class="fill" style="width:${data.ecoScore}%"></div></div>
+          <p><b>Eco Score:</b> ${data.ecoScore}/100 <span class="badge">${badge}</span></p>
+
+          <p><b>⚡ Carbon Footprint:</b> ${data.carbonFootprint}</p>
+          <p><b>💧 Water Usage:</b> ${data.waterUsage}</p>
+          <p><b>🗑️ Waste:</b> ${data.waste}</p>
+
+          <p><b>🌱 Alternatives:</b></p>
+          <ul class="list">${data.ecoAlternatives.split('\n').map(t=>`<li>${t}</li>`).join('')}</ul>
+
+          <p>✨ If you follow suggestions, score could improve to <b>${data.potentialScore}/100</b></p>
+
+          <p><b>💡 Suggestions:</b></p>
+          <ul class="list">${data.suggestions.map(s=>`<li>${s}</li>`).join('')}</ul>
+        `;
+
+        // add to datalist if new
+        const dl = document.getElementById('previousActions');
+        const exists = [...dl.options].some(o=>o.value===res.data.action);
+        if(!exists){
+          const opt = document.createElement('option'); opt.value = res.data.action; dl.appendChild(opt);
+        }
+      }catch(err){
+        report.textContent = '⚠️ Error fetching AI response';
+      }
+      btn.disabled = false;
+      btn.textContent = 'Check Impact';
+    }
+  </script>
+</body>
+</html>
